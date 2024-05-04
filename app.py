@@ -14,6 +14,8 @@ from langchain.agents.format_scratchpad.openai_tools import (
 )
 from langchain.agents.output_parsers.openai_tools import OpenAIToolsAgentOutputParser
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+import textwrap
 import graphviz
 import json
 import streamlit as st
@@ -27,6 +29,7 @@ load_dotenv()
 @tool
 def generate_result_doc(result: str):
     """Generate result in a document based on input information."""
+    print("showing full document..")
     st.info(result)
 
 @tool
@@ -34,10 +37,17 @@ def generate_flow_chart(flow: str):
     """Generate flow chart based on input information."""
 
     # Load the JSON text into a Python list
+    print(flow)
     flow_array = json.loads(flow)
 
     # Print the resulting JSON array
     print(flow_array)
+    # {'start': 'Install Operator Profile (300)', 'end': 'Remote Management (400)'}, {'star Operator Profile (300)'}, {'start': 'Install Operator Profile (300)', 'end': 'Remote Management (400)'}, {'start': 'Remote Management (400)t': 'Remote Management (400)', 'end': 'Network Optimization (500)'}, {'start': 'Network Optimization (500)', 'end': 'End (600)'}]
+    # Start: Device Setup (100), End: Activate eSIM (200)
+    # Start: Activate eSIM (200), End: Install Operator Profile (300)
+    # Start: Install Operator Profile (300), End: Remote Management (400)
+    # Start: Remote Management (400), End: Network Optimization (500)
+    # Start: Network Optimization (500), End: End (600)  
 
     # Create a graphlib graph object
     graph = graphviz.Digraph()
@@ -48,11 +58,64 @@ def generate_flow_chart(flow: str):
         print(f"Start: {start_point}, End: {end_point}")
         graph.edge(start_point, end_point)
 
+    # Add a label to the graph (inside the graph)
+    graph.attr(label="Figure C: Flow chart")
+    # Display the flow chart
     st.graphviz_chart(graph)
+
+@tool
+def generate_block_diagram(block_one: str, block_two: str, block_three: str, block_four: str, connections: str):
+    """Generate block diagram based on input information."""
+    print(connections)
+    connections_dict = json.loads(connections)
+    print(connections_dict)
+    # Define block positions and sizes
+    blocks_positions = {
+        block_one: (0, 0, 1, 1),
+        block_two: (0, 2, 1, 1),
+        block_three: (2, 0, 1, 1),
+        block_four: (2, 2, 1, 1)
+    }
+    print(blocks_positions)
+
+    # Define connections between blocks
+    # connections_dict = {
+    #     'Block 1': ['Block 2', 'Block 4'],
+    #     'Block 2': ['Block 3', 'Block 4'],
+    #     'Block 3': ['Block 1'],
+    #     'Block 4': ['Block 3']
+    # }
+
+    # Set up plot
+    plt.figure(figsize=(6, 4))
+    plt.axis('off')
+
+    # Draw blocks and arrows
+    # Function to draw blocks
+    for block, (x, y, width, height) in blocks_positions.items():
+        plt.gca().add_patch(Rectangle((x, y), width, height, fill=True, edgecolor='black', facecolor='lightgrey'))
+        wrapped_text = '\n'.join(textwrap.wrap(block, width=10))  # Adjust width as needed
+        plt.text(x + width / 2, y + height / 2, wrapped_text, ha='center', va='center', fontsize=10)
+
+    # Function to draw arrows    
+    for block, destinations in connections_dict.items():
+        for dest_block in destinations:
+            x_start, y_start, _, _ = blocks_positions[block]
+            x_end, y_end, _, _ = blocks_positions[dest_block]
+            plt.arrow(x_start + 0.5, y_start + 0.5, x_end - x_start, y_end - y_start,
+                    head_width=0.01, head_length=0.01, fc='lightgrey', ec='lightgrey')
+
+    # Add figure name
+    plt.text(0, 4, 'Figure A: Block Diagram', fontsize=12, ha='center')
+
+    # Show plot
+    # plt.show() # UserWarning: FigureCanvasAgg is non-interactive, and thus cannot be shown
+    # Display plot in Streamlit
+    st.pyplot(plt.gcf())
 
 
 # Create langchain agent with the tools above
-tools = [generate_result_doc, generate_flow_chart]
+tools = [generate_result_doc, generate_block_diagram, generate_flow_chart]
 
 prompt = ChatPromptTemplate.from_messages(
     [
@@ -69,8 +132,9 @@ prompt = ChatPromptTemplate.from_messages(
                 5. Detailed Description: This section is often detailed but direct and omits irrelevant information. This is where a patent application describes how to make and use the item. This section is around 1000 words.
                 6. Claims: The claims section forms the legal basis of a patent application. This section is around 800 words. Since the purpose is to define the boundaries of the patent protection, many creators have a legal professional help draft their claims. There are three factors typically addressed: scope, characteristics, and structure. Patent claims are often complete, supported, and precise. Claims should be independent sentences and provide clarity to the reviewer without the help of additional terms like "strong" or "major part".
                 7. Abstract: Abstracts present a broad description of the innovation. This section is around 150 words and typically includes the field of the invention, the related problem, the solution, the primary use of the invention.
-                You should include all answers from all steps above and use provided documentation tool to show the finished result in a document.
-                After the document, you should also show exhibits. You should draw the flow chart with provided tool. You should first generate a JSON array with a series of starting and ending points and then provide the json input to the flow chart tool. The json input should always contain "start" and "end" to describe the starting point and end point. You should draw flow chart only once.
+                You should first include all answers from all steps above and use provided generate documentation tool to show the full document result.
+                After shown the document by tool, you should then draw a block diagram. You should draw the block diagram with provided tool. You should first generate four block names and then generate the connections among them. For example, connections = {"Block 1": ["Block 2", "Block 4"], "Block 2": ["Block 3", "Block 4"], "Block 3": ["Block 1"], "Block 4": ["Block 3"]}. You should then provide the four block names as json string and the connections as json dictionary to the block diagram tool. Each block should also contain a number in sequence order, such as 100, 200, 300, 400. For example, "eSIM (100)", "Device Management Module (200)", "Network Service Database (300)", "User Interface (400)".
+                Finally you should draw a flow chart with provided tool. You should first generate a JSON array with a series of starting and ending points and then provide the json input to the flow chart tool. Each point should always contain "start" and "end" to describe the starting point and end point. Each point should also contain a number in sequence order, starting from 500, such as 500, 600, 700, 800. For example, {'start': 'Install Operator Profile (500)', 'end': 'Remote Management (600)'}, {'start': 'Remote Management (600)', 'end': 'Network Optimization (700)'}, {'start': 'Network Optimization (700)', 'end': 'End (900)'}.
                 """
             )
         ),
